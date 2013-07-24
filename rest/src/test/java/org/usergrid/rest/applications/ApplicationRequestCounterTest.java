@@ -27,8 +27,6 @@ import javax.ws.rs.core.MediaType;
 import org.codehaus.jackson.JsonNode;
 import org.junit.Test;
 import org.usergrid.cassandra.CassandraRunner;
-import org.usergrid.management.ApplicationInfo;
-import org.usergrid.management.OrganizationInfo;
 import org.usergrid.persistence.CounterResolution;
 import org.usergrid.persistence.EntityManager;
 import org.usergrid.persistence.EntityManagerFactory;
@@ -37,9 +35,6 @@ import org.usergrid.persistence.Results;
 import org.usergrid.rest.AbstractRestTest;
 import org.usergrid.services.ServiceManager;
 import org.usergrid.utils.UUIDUtils;
-
-import com.sun.jersey.api.client.ClientResponse.Status;
-import com.sun.jersey.api.client.UniformInterfaceException;
 
 /**
  * Invoke application request counters
@@ -67,8 +62,8 @@ public class ApplicationRequestCounterTest extends AbstractRestTest {
     	EntityManagerFactory emf = CassandraRunner.getBean(EntityManagerFactory.class);
     	EntityManager em = emf.getEntityManager(applicationId);
     	
-		int beforeTotalCall = getConter(em, ServiceManager.APPLICATION_REQUESTS);
-		int beforeCall = getConter(em, ServiceManager.APPLICATION_REQUESTS_PER.concat("get"));
+		int beforeTotalCall = getCounter(em, ServiceManager.APPLICATION_REQUESTS);
+		int beforeCall = getCounter(em, ServiceManager.APPLICATION_REQUESTS_PER.concat("get"));
 		
 		// call
 		node = resource().path("/test-organization/test-app/counters")
@@ -79,14 +74,86 @@ public class ApplicationRequestCounterTest extends AbstractRestTest {
     	
     	assertNotNull(node.get("counters"));
     	
-    	int afterTotalCall = getConter(em, ServiceManager.APPLICATION_REQUESTS);
-		int afterCall = getConter(em, ServiceManager.APPLICATION_REQUESTS_PER.concat("get"));
+    	int afterTotalCall = getCounter(em, ServiceManager.APPLICATION_REQUESTS);
+		int afterCall = getCounter(em, ServiceManager.APPLICATION_REQUESTS_PER.concat("get"));
 		
 		assertEquals(1, afterCall-beforeCall);
 		assertEquals(1, afterTotalCall-beforeTotalCall);
     }
 
-	private int getConter(EntityManager em, String key) throws Exception {
+  @Test
+  public void applicationCounterCreationTest() throws Exception{
+
+
+    JsonNode node = resource().path("/test-organization/test-app")
+        .queryParam("access_token", access_token)
+        .accept(MediaType.APPLICATION_JSON)
+        .type(MediaType.APPLICATION_JSON_TYPE).get(JsonNode.class);
+
+    assertNotNull(node.get("entities"));
+
+    String uuid = node.get("application").asText();
+    assertEquals(true, UUIDUtils.isUUID(uuid));
+
+    UUID applicationId = UUID.fromString(uuid);
+    EntityManagerFactory emf = CassandraRunner.getBean(EntityManagerFactory.class);
+    EntityManager em = emf.getEntityManager(applicationId);
+
+    //int beforeTotalCall = getCounter(em, ServiceManager.APPLICATION_REQUESTS);
+    //int beforeCall = getCounter(em, ServiceManager.APPLICATION_REQUESTS_PER.concat("get"));
+
+    Map counterName = hashMap("test_cliks","1");
+    Map payload = hashMap("counter",counterName);//hashMap("counters",
+    // "{\"test_cliks\" : \"1\"}").map("timestamp",
+    // "0");
+    payload.put("timestamp","0");
+
+
+    node = resource().path("/test-organization/test-app")
+        .queryParam("access_token", superAdminToken())
+        .accept(MediaType.APPLICATION_JSON)
+        .type(MediaType.APPLICATION_JSON_TYPE)
+        .get(JsonNode.class);
+
+    node = resource().path("/test-organization/test-app/events")
+        .queryParam("access_token", superAdminToken())
+        .accept(MediaType.APPLICATION_JSON)
+        .type(MediaType.APPLICATION_JSON_TYPE)
+        .post(JsonNode.class,payload);
+
+
+//     count = resource().path("/test-organization/test-app/counters")
+//        .queryParam("counter","test_cliks")
+//        .queryParam("access_token", access_token)
+//        .accept(MediaType.APPLICATION_JSON)
+//        .type(MediaType.APPLICATION_JSON_TYPE)
+//        .get(JsonNode.class);
+    int beforeTotalCall = getCounter(em, ServiceManager.APPLICATION_REQUESTS_PER.concat("get"));
+    //int beforeCall = getCounter(em, ServiceManager.APPLICATION_REQUESTS_PER.concat("get"));
+
+    node = resource().path("/test-organization/test-app")
+        .queryParam("access_token", superAdminToken())
+        .accept(MediaType.APPLICATION_JSON)
+        .type(MediaType.APPLICATION_JSON_TYPE)
+        .get(JsonNode.class);
+
+    JsonNode rest = resource().path("/test-organization/test-app/counters")
+        .queryParam("start_time","1374702051841")
+        .queryParam("end_time",String.valueOf(System.currentTimeMillis()))
+        .queryParam("resolution","day")
+        .queryParam("counter","test_cliks")
+        .queryParam("access_token", superAdminToken())
+        .accept(MediaType.TEXT_HTML)
+        .type(MediaType.APPLICATION_JSON_TYPE)
+        .get(JsonNode.class);
+
+    // String entityDisplay = clientActivationPost.getEntity(String.class);
+
+    assert(false);
+  }
+
+
+  private int getCounter(EntityManager em, String key) throws Exception {
 		Query query = new Query();
 		query.addCounterFilter(key + ":*:*:*");
 		query.setStartTime(ts);
